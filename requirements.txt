@@ -1,0 +1,7 @@
+PyQt6
+pandapower
+matplotlib
+scipy
+openpyxl
+numpy
+pyinstaller

@@ -1,0 +1,101 @@
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+# Classe responsável por gerenciar e desenhar o gráfico da Curva PV
+class PVPlotWidget(QWidget):
+    # Construtor da classe PVPlotWidget, inicializa a figura e o canvas
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout(self)
+
+        self.figure = Figure(figsize=(5, 4), dpi=100)
+        self.canvas = FigureCanvas(self.figure)
+        self.layout.addWidget(self.canvas)
+
+        # Configurar estilo escuro para o gráfico
+        self.figure.patch.set_facecolor('#1e1e1e')
+        self.ax = self.figure.add_subplot(111)
+        self.ax.set_facecolor('#2d2d2d')
+        self.ax.tick_params(colors='white')
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        self.ax.title.set_color('white')
+        self.ax.spines['bottom'].set_color('white')
+        self.ax.spines['top'].set_color('white')
+        self.ax.spines['right'].set_color('white')
+        self.ax.spines['left'].set_color('white')
+
+    # Função que desenha a curva PV no gráfico a partir das listas de potência e tensão
+    def plot_curve(self, p_values, v_values, target_bus_name=""):
+        self.ax.clear()
+
+        self.ax.set_facecolor('#2d2d2d')
+        self.ax.tick_params(colors='white')
+        self.ax.xaxis.label.set_color('white')
+        self.ax.yaxis.label.set_color('white')
+        self.ax.title.set_color('white')
+        self.ax.spines['bottom'].set_color('white')
+        self.ax.spines['top'].set_color('white')
+        self.ax.spines['right'].set_color('white')
+        self.ax.spines['left'].set_color('white')
+
+        if not p_values or not v_values:
+            self.canvas.draw()
+            return
+
+        # Ordenar valores com base em v_values em ordem decrescente para traçar a curva contínua superior e depois a inferior
+        combined = sorted(zip(v_values, p_values), key=lambda x: x[0], reverse=True)
+        v_sorted = [x[0] for x in combined]
+        p_sorted = [x[1] for x in combined]
+
+        self.ax.plot(p_sorted, v_sorted, color='#00aaff', linewidth=2, marker='o', markersize=4)
+
+        # Destacar ponto de colapso (Nariz da curva PV é o ponto de potência máxima)
+        max_idx = p_sorted.index(max(p_sorted))
+        collapse_p = p_sorted[max_idx]
+        collapse_v = v_sorted[max_idx]
+        self.ax.plot(collapse_p, collapse_v, color='red', marker='x', markersize=10, mew=2, label=f"Ponto de Colapso (P_max = {collapse_p:.2f} MW)")
+
+        # Destacar ponto onde a tensão atinge 0.95 PU
+        p_095 = None
+        for i in range(len(v_sorted) - 1):
+            v1, p1 = v_sorted[i], p_sorted[i]
+            v2, p2 = v_sorted[i+1], p_sorted[i+1]
+            if v1 >= 0.95 and v2 <= 0.95:
+                if v1 == v2:
+                    p_095 = p1
+                else:
+                    p_095 = p1 + (p2 - p1) * (0.95 - v1) / (v2 - v1)
+                break
+                
+        if p_095 is not None:
+            self.ax.plot(p_095, 0.95, color='yellow', marker='x', markersize=10, mew=2, label=f"V = 0.95 PU (P = {p_095:.2f} MW)")
+
+        title = f"Curva PV (Tensão x Potência) - Barra {target_bus_name}" if target_bus_name else "Curva PV (Tensão x Potência)"
+        self.ax.set_title(title)
+        self.ax.set_xlabel("Potência Ativa (MW)")
+        self.ax.set_ylabel("Tensão (PU)")
+        self.ax.grid(True, linestyle='--', alpha=0.5, color='gray')
+        self.ax.legend(loc='upper right', facecolor='#1e1e1e', edgecolor='white', labelcolor='white')
+
+        self.canvas.draw()
+
+
+    # Função para exportar a imagem da figura atual do gráfico
+    def export_plot(self, filename):
+        self.figure.savefig(filename, bbox_inches='tight')
+
+# Função utilitária para preencher as tabelas de resultados na interface
+def populate_table(table_widget: QTableWidget, data: list, headers: list):
+    table_widget.clear()
+    table_widget.setRowCount(len(data))
+    table_widget.setColumnCount(len(headers))
+    table_widget.setHorizontalHeaderLabels(headers)
+
+    for row_idx, row_data in enumerate(data):
+        for col_idx, item_data in enumerate(row_data):
+            item = QTableWidgetItem(str(item_data))
+            table_widget.setItem(row_idx, col_idx, item)
+
+    table_widget.resizeColumnsToContents()
